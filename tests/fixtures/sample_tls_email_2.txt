@@ -1,0 +1,28 @@
+From: visa.appointments@tlscontact.fr
+Subject: Your visa appointment - RDV confirmé
+---
+Dear Applicant,
+
+Your appointment request has been approved.
+
+Appointment Details:
+- Date: January 22, 2026
+- Time: 14:00
+- Location: TLScontact Lyon
+- Reference: VIS-2026-FR-45678
+
+Please arrive 15 minutes early and bring:
+1. Valid passport
+2. Application form
+3. Supporting documents
+4. Payment receipt
+
+To view or modify your appointment:
+https://fr.tlscontact.com/my-appointments/VIS-2026-FR-45678
+
+Important: If you cannot attend, please cancel at least 24 hours in advance.
+
+Best regards,
+TLScontact Team
+
+For support: contact@tlscontact.com

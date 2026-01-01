@@ -1,0 +1,23 @@
+From: noreply@tlscontact.com
+Subject: Confirmation de rendez-vous - TLScontact France
+---
+Bonjour,
+
+Votre rendez-vous pour votre demande de visa a été confirmé.
+
+Date du rendez-vous: 15/01/2026
+Heure: 10:30
+
+Centre de visa: TLScontact Paris
+Adresse: 123 Rue de la République, 75001 Paris
+
+Veuillez vous présenter à l'heure indiquée avec tous les documents requis.
+
+Pour modifier ou annuler votre rendez-vous, cliquez sur le lien ci-dessous:
+https://fr.tlscontact.com/appointments/confirm?id=ABC123XYZ
+
+Cordialement,
+L'équipe TLScontact
+
+---
+Ce message a été envoyé automatiquement. Merci de ne pas y répondre.

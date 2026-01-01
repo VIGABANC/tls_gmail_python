@@ -1,0 +1,57 @@
+# Render Blueprint for TLScontact Gmail Watcher (Python)
+# This file defines a FREE Web Service that can be triggered by external pingers
+# Deployment: 24/7 Free (using cron-job.org as a pinger)
+
+services:
+  # Web Service - Runs the FastAPI server
+  - type: web
+    name: tlscontact-visa-watcher-py
+    env: python
+    plan: free
+    region: frankfurt  # Optional: Choose region closest to you
+    
+    # Python-specific build/start commands
+    # Note: We use the root context, assuming this file is in the root or handling paths correctly.
+    # If using the repo provided, files are in python_backend/
+    # Render "Root Directory" setting in the dashboard should be set to "python_backend"
+    
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port 10000"
+    
+    # Environment variables
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: LOG_LEVEL
+        value: info
+      
+      # Google OAuth credentials (set these in dashboard!)
+      - key: GOOGLE_CLIENT_ID
+        sync: false 
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: GOOGLE_USER_EMAIL
+        sync: false
+      
+      # Telegram credentials (set in dashboard!)
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      
+      # Polling Config
+      - key: POLL_QUERY
+        value: "from:(tlscontact.com) OR subject:(rendez-vous OR rdv OR visa)"
+      - key: SEARCH_IN_ANYWHERE
+        value: "true"
+      
+      # Critical for Free Tier: 
+      # Disable continuous poll loop (rely on external pinger instead)
+      # This prevents the app from trying to run background threads that might get killed
+      - key: ENABLE_CONTINUOUS_POLL
+        value: "false"
+        
+      - key: PORT
+        value: "10000"

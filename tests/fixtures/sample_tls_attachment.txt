@@ -1,0 +1,17 @@
+From: appointments@tls-contact.com
+Subject: Confirmation de rendez-vous visa
+Date: Tue, 20 Jan 2026 14:30:00 +0000
+
+---
+Hello,
+
+Please find your appointment details in the attachment.
+
+Best regards,
+TLScontact Team
+---
+Attachment: appointment_details.txt
+Content-Type: text/plain
+Content:
+Votre rendez-vous est confirmé pour le 25/01/2026 à 10h00.
+Lien de confirmation: https://tlsvisa.com/confirm?id=ATTACH123
