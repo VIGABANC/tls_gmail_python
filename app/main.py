@@ -127,6 +127,22 @@ async def trigger_test_telegram():
         logger.error(f"Endpoint /test-telegram failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Unexpected Error: {str(e)}")
 
+@app.get("/debug/env")
+async def debug_env():
+    """Check which environment variables are set (for debugging)"""
+    bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    chat_id = os.getenv('TELEGRAM_CHAT_ID')
+    railway_env = os.getenv('RAILWAY_ENVIRONMENT')
+    
+    return {
+        "telegram_bot_token_set": bool(bot_token),
+        "telegram_bot_token_length": len(bot_token) if bot_token else 0,
+        "telegram_chat_id_set": bool(chat_id),
+        "telegram_chat_id_value": chat_id if chat_id else None,
+        "railway_environment": railway_env,
+        "is_production": bool(railway_env)
+    }
+
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
     """Handle incoming Telegram webhook updates"""
