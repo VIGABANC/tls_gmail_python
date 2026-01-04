@@ -89,9 +89,21 @@ async def send_appointment_notification(parsed: Dict[str, Any], message_id: str)
     })
 
 async def test_connection() -> bool:
-    """Test Telegram connection"""
+    """Test Telegram connection and report service status"""
+    from datetime import datetime
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    status_msg = (
+        f"✅ <b>TLScontact Watcher is Online</b>\n\n"
+        f"<b>Status:</b> Healthy\n"
+        f"<b>Time:</b> {now}\n"
+        f"<b>Environment:</b> {'Production' if os.getenv('RAILWAY_ENVIRONMENT') else 'Local'}\n"
+        f"<b>System:</b> Python/FastAPI"
+    )
+    
     try:
-        await send_message('✅ TLScontact watcher is running (Python)!\n\nTest message sent successfully.')
+        await send_message(status_msg)
         return True
-    except Exception:
+    except Exception as e:
+        logger.error(f"Telegram test connection failed: {str(e)}")
         return False
