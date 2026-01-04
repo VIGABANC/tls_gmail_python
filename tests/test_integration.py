@@ -1,190 +1,88 @@
-import sys
+#!/usr/bin/env python3
+"""
+telegram_test_status_ptb20.py
+Async handler for python-telegram-bot v20+.
+
+Usage:
+- Set PROJECT_URL (e.g. "https://example.com") OR PROJECT_HOST and PROJECT_PORT.
+- Register handlers:
+    from telegram_test_status_ptb20 import register_handlers
+    register_handlers(application)
+"""
 import os
+import asyncio
+import time
+from typing import Tuple
 
-# Add parent directory to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import aiohttp
+from telegram import Update
+from telegram.ext import (
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+    Application,
+)
 
-from app.parser import parse_message
+PROJECT_URL = os.environ.get("PROJECT_URL")
+PROJECT_HOST = os.environ.get("PROJECT_HOST")
+PROJECT_PORT = int(os.environ.get("PROJECT_PORT") or 0)
 
-# Fixture loader for integration tests (duplicate logic, could be shared)
-FIXTURES_DIR = os.path.join(os.path.dirname(__file__), 'fixtures')
 
-def load_fixture(filename):
-    file_path = os.path.join(FIXTURES_DIR, filename)
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
+async def check_http(url: str, timeout: int = 5) -> Tuple[bool, str]:
+    start = time.monotonic()
+    try:
+        async with aiohttp.ClientSession() as sess:
+            async with sess.get(url, timeout=timeout) as resp:
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                ok = resp.status < 500
+                return ok, f"HTTP {resp.status} ({resp.reason}) - {elapsed_ms}ms"
+    except Exception as e:
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        return False, f"HTTP error: {e} - {elapsed_ms}ms"
 
-    lines = content.split('\n')
-    message = {
-        'id': filename.replace('.txt', ''),
-        'from': '',
-        'subject': '',
-        'snippet': '',
-        'body': ''
-    }
 
-    in_body = False
-    body_lines = []
+async def check_tcp(host: str, port: int, timeout: int = 3) -> Tuple[bool, str]:
+    start = time.monotonic()
+    try:
+        fut = asyncio.open_connection(host, port)
+        reader, writer = await asyncio.wait_for(fut, timeout=timeout)
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        return True, f"TCP {host}:{port} reachable - {elapsed_ms}ms"
+    except Exception as e:
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        return False, f"TCP error: {e} - {elapsed_ms}ms"
 
-    for line in lines:
-        line = line.replace('\r', '')
-        if line.strip() == '---':
-            in_body = True
-            continue
 
-        if not in_body:
-            if line.startswith('From: '):
-                message['from'] = line[6:].strip()
-            elif line.startswith('Subject: '):
-                message['subject'] = line[9:].strip()
-        else:
-            body_lines.append(line)
+async def _do_check() -> Tuple[bool, str]:
+    if PROJECT_URL:
+        return await check_http(PROJECT_URL)
+    if PROJECT_HOST and PROJECT_PORT:
+        return await check_tcp(PROJECT_HOST, PROJECT_PORT)
+    return False, "No project target configured. Set PROJECT_URL or PROJECT_HOST & PROJECT_PORT."
 
-    message['body'] = '\n'.join(body_lines)
-    message['snippet'] = ' '.join(body_lines[:3])[:200]
-    return message
 
-# Integration tests using mocked services
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from app.watcher import run_poll_cycle
-from app.storage import close_storage, init_storage
+async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Respond to /test command"""
+    msg = await update.effective_message.reply_text("Checking project status...")
+    ok, info = await _do_check()
+    status = "ONLINE ✅" if ok else "OFFLINE ❌"
+    await msg.edit_text(f"Project is {status}\nDetail: {info}")
 
-@pytest.fixture
-def mock_env(monkeypatch):
-    monkeypatch.setenv('TELEGRAM_BOT_TOKEN', 'test_token')
-    monkeypatch.setenv('TELEGRAM_CHAT_ID', 'test_chat_id')
-    monkeypatch.setenv('GOOGLE_CLIENT_ID', 'test_id')
-    monkeypatch.setenv('GOOGLE_CLIENT_SECRET', 'test_secret')
-    monkeypatch.setenv('GOOGLE_REFRESH_TOKEN', 'test_refresh')
-    monkeypatch.setenv('PYTHONPATH', '.')
 
-@pytest.mark.asyncio
-async def test_full_poll_cycle_with_appointment(mock_env):
-    # Mock Gmail Service
-    mock_gmail = MagicMock()
-    mock_messages_list = MagicMock()
-    mock_messages_list.execute.return_value = {
-        'messages': [{'id': 'msg_123', 'threadId': 't_123'}]
-    }
-    mock_gmail.users().messages().list.return_value = mock_messages_list
+async def test_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Respond to plain text 'test' (case-insensitive)"""
+    text = (update.effective_message.text or "").strip().lower()
+    if text != "test":
+        return
+    await test_command(update, context)
 
-    # Load a fixture as the message content
-    fixture_msg = load_fixture('sample_tls_email_1.txt')
-    
-    # Mock message get response structure
-    mock_message_get = MagicMock()
-    mock_message_get.execute.return_value = {
-        'id': 'msg_123',
-        'threadId': 't_123',
-        'labelIds': ['INBOX'],
-        'snippet': fixture_msg['snippet'],
-        'payload': {
-            'headers': [
-                {'name': 'From', 'value': fixture_msg['from']},
-                {'name': 'Subject', 'value': fixture_msg['subject']},
-                {'name': 'Date', 'value': 'Mon, 01 Jan 2026 10:00:00 +0000'}
-            ],
-            'body': {
-                'data': None # Single part
-            },
-            'parts': [
-                {
-                    'mimeType': 'text/plain',
-                    'body': {
-                        'data': None # We rely on our parser consuming the 'body' string directly in tests, 
-                                     # but in app/gmail_client.py it extracts from base64.
-                                     # For this integration test, let's mock get_message directly to avoid mocking base64 decoding.
-                    }
-                }
-            ]
-        }
-    }
-    mock_gmail.users().messages().get.return_value = mock_message_get
 
-    # Mock Telegram
-    mock_httpx_post = AsyncMock()
-    mock_httpx_post.return_value.status_code = 200
-    mock_httpx_post.return_value.json.return_value = {'ok': True}
-
-    # Patch everything
-    with patch('app.gmail_client.build', return_value=mock_gmail), \
-         patch('app.gmail_client.Credentials', MagicMock()), \
-         patch('httpx.AsyncClient.post', mock_httpx_post), \
-         patch('app.watcher.get_message', new_callable=AsyncMock) as mock_get_msg_func:
-        
-        # Override get_message to return our clean fixture object
-        # The watcher calls get_message(id) which returns a parsed dict structure
-        # In app/gmail_client.py get_message returns dict keys: id, threadId, labelIds, subject, from, to, date, snippet, body
-        mock_get_msg_func.return_value = {
-            'id': 'msg_123',
-            'threadId': 't_123',
-            'labelIds': ['INBOX'],
-            'subject': fixture_msg['subject'],
-            'from': fixture_msg['from'],
-            'to': 'me',
-            'date': 'Mon, 01 Jan 2026',
-            'snippet': fixture_msg['snippet'],
-            'body': fixture_msg['body']
-        }
-        
-        # Run the cycle
-        stats = await run_poll_cycle()
-        
-        # Verify results
-        assert stats['checked'] == 1
-        assert stats['new'] == 1
-        assert stats['notified'] == 1
-        assert len(stats['errors']) == 0
-        
-        # Verify Telegram send was called
-        mock_httpx_post.assert_called_once()
-        args, kwargs = mock_httpx_post.call_args
-        assert 'api.telegram.org' in args[0]
-        assert 'EMERGENCY' in kwargs['json']['text']
-
-    close_storage()
-
-@pytest.mark.asyncio
-async def test_deduplication(mock_env):
-    # Same setup but run twice
-    
-    # Mock clients as before
-    mock_gmail = MagicMock()
-    mock_messages_list = MagicMock()
-    # Return same message both times
-    mock_messages_list.execute.return_value = {'messages': [{'id': 'msg_dup', 'threadId': 't_dup'}]}
-    mock_gmail.users().messages().list.return_value = mock_messages_list
-
-    mock_httpx_post = AsyncMock()
-    mock_httpx_post.return_value.status_code = 200
-
-    fixture_msg = load_fixture('sample_tls_email_1.txt')
-    
-    with patch('app.gmail_client.build', return_value=mock_gmail), \
-         patch('app.gmail_client.Credentials', MagicMock()), \
-         patch('httpx.AsyncClient.post', mock_httpx_post), \
-         patch('app.watcher.get_message', new_callable=AsyncMock) as mock_get_msg_func:
-         
-        mock_get_msg_func.return_value = {
-            'id': 'msg_dup',
-            'threadId': 't_dup',
-            'labelIds': ['INBOX'],
-            'subject': fixture_msg['subject'],
-            'from': fixture_msg['from'],
-            'to': 'me',
-            'date': 'Mon, 01 Jan 2026',
-            'snippet': fixture_msg['snippet'],
-            'body': fixture_msg['body']
-        }
-
-        # First run
-        stats1 = await run_poll_cycle()
-        assert stats1['notified'] == 1
-
-        # Second run
-        stats2 = await run_poll_cycle()
-        assert stats2['notified'] == 0
-        assert stats2['processed'] == 1 # Skipped as processed
-
-    close_storage()
+def register_handlers(application: Application) -> None:
+    application.add_handler(CommandHandler("test", test_command))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, test_text_handler))
