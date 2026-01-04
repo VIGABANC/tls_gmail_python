@@ -91,6 +91,30 @@ async def send_appointment_notification(parsed: Dict[str, Any], message_id: str)
         'disable_preview': False  # Enable preview for appointment links
     })
 
+async def send_reply(chat_id: str, message_id: int, text: str) -> Dict[str, Any]:
+    """Send a reply to a specific message"""
+    bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    
+    if not bot_token:
+        raise RuntimeError('Telegram not configured: Missing TELEGRAM_BOT_TOKEN')
+    
+    url = f"{TELEGRAM_API_BASE}/bot{bot_token}/sendMessage"
+    
+    payload = {
+        'chat_id': chat_id,
+        'text': text,
+        'parse_mode': 'HTML',
+        'reply_to_message_id': message_id
+    }
+    
+    async with httpx.AsyncClient() as client:
+        logger.debug(f'Sending Telegram reply to message {message_id}...')
+        response = await client.post(url, json=payload, timeout=10.0)
+        response.raise_for_status()
+        result = response.json()
+        logger.info('Telegram reply sent successfully')
+        return result
+
 async def test_connection() -> bool:
     """Test Telegram connection and report service status"""
     from datetime import datetime

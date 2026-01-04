@@ -2,12 +2,12 @@ import os
 import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from .watcher import run_poll_cycle, start_continuous_polling
 from .utils import logger
 from .storage import close_storage
-from .notifier import test_connection
+from .notifier import test_connection, send_reply
 
 app = FastAPI(title="TLScontact Gmail Watcher")
 
@@ -126,6 +126,51 @@ async def trigger_test_telegram():
     except Exception as e:
         logger.error(f"Endpoint /test-telegram failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Unexpected Error: {str(e)}")
+
+@app.post("/webhook")
+async def telegram_webhook(request: Request):
+    """Handle incoming Telegram webhook updates"""
+    try:
+        update = await request.json()
+        logger.debug(f"Received webhook update: {update}")
+        
+        # Check if this is a message update
+        if 'message' not in update:
+            return {"ok": True}
+        
+        message = update['message']
+        
+        # Only respond to text messages
+        if 'text' not in message:
+            return {"ok": True}
+        
+        chat_id = str(message['chat']['id'])
+        message_id = message['message_id']
+        text = message['text']
+        
+        logger.info(f"Received message from {chat_id}: {text}")
+        
+        # Generate status response
+        from datetime import datetime
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        response_text = (
+            f"🤖 <b>Bot Online</b>\n\n"
+            f"✅ Service is running and healthy\n"
+            f"🕒 {now}\n"
+            f"🌐 {'Production' if os.getenv('RAILWAY_ENVIRONMENT') else 'Local'}\n\n"
+            f"Your message: <i>{text}</i>"
+        )
+        
+        # Send reply
+        await send_reply(chat_id, message_id, response_text)
+        
+        return {"ok": True}
+        
+    except Exception as e:
+        logger.error(f"Webhook failed: {str(e)}", exc_info=True)
+        # Return 200 OK even on error to prevent Telegram from retrying
+        return {"ok": False, "error": str(e)}
 
 @app.on_event("startup")
 async def startup_event():
