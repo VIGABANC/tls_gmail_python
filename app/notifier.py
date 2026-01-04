@@ -33,7 +33,10 @@ async def send_message(text: str, options: Optional[Dict[str, Any]] = None) -> D
     chat_id = os.getenv('TELEGRAM_CHAT_ID')
 
     if not bot_token or not chat_id:
-        raise RuntimeError('Telegram not configured')
+        missing = []
+        if not bot_token: missing.append('TELEGRAM_BOT_TOKEN')
+        if not chat_id: missing.append('TELEGRAM_CHAT_ID')
+        raise RuntimeError(f"Telegram not configured: Missing {', '.join(missing)}")
 
     # Apply rate limiting
     if rate_limiter:

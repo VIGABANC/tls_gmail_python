@@ -1,6 +1,7 @@
 import os
 import asyncio
 from datetime import datetime
+from dotenv import load_dotenv
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import HTMLResponse
 from .watcher import run_poll_cycle, start_continuous_polling
@@ -119,14 +120,16 @@ async def trigger_test_telegram():
         if success:
             return {"success": True, "message": "Test notification sent to Telegram"}
         else:
-            # If success is False, test_connection already logged the error
-            raise HTTPException(status_code=500, detail="Failed to send Telegram notification (see logs for details)")
+            raise HTTPException(status_code=500, detail="Failed to send Telegram notification (check Railway environment variables)")
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Endpoint /test-telegram failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        logger.error(f"Endpoint /test-telegram failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Unexpected Error: {str(e)}")
 
 @app.on_event("startup")
 async def startup_event():
+    load_dotenv()
     logger.info("Service starting...")
     
     # Start continuous polling if enabled
