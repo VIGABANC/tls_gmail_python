@@ -166,17 +166,27 @@ async def telegram_webhook(request: Request):
         
         logger.info(f"Received message from {chat_id}: {text}")
         
+        # Check if message is "test"
+        is_test = text.lower().strip() == 'test'
+        
         # Generate status response
         from datetime import datetime
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
-        response_text = (
-            f"🤖 <b>Bot Online</b>\n\n"
-            f"✅ Service is running and healthy\n"
-            f"🕒 {now}\n"
-            f"🌐 {'Production' if os.getenv('RAILWAY_ENVIRONMENT') else 'Local'}\n\n"
-            f"Your message: <i>{text}</i>"
-        )
+        if is_test:
+            response_text = (
+                f"✅ <b>Test Received! Bot is Online.</b>\n\n"
+                f"<b>Status:</b> Healthy\n"
+                f"<b>Time:</b> {now}\n"
+                f"<b>Environment:</b> {'Production' if os.getenv('RAILWAY_ENVIRONMENT') else 'Local'}\n"
+                f"<b>System:</b> Python/FastAPI monitoring TLScontact"
+            )
+        else:
+            response_text = (
+                f"🤖 <b>TLScontact Watcher</b>\n\n"
+                f"I received your message: \"{text}\"\n"
+                f"The service is currently online and healthy."
+            )
         
         # Send reply
         await send_reply(chat_id, message_id, response_text)
