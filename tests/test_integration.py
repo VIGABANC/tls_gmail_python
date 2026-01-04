@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """
-Robust loader for PROJECT_URL / PROJECT_HOST / PROJECT_PORT with a Telegram /test handler.
+telegram_test_status.py
 
-Priority:
-1. Environment variables (os.environ)
-2. .env file (python-dotenv)
-3. Project config modules (config.py, settings.py, or package-level attributes)
-4. Defaults (None / 0)
+Async /test handler (python-telegram-bot v20+).
 
-Usage:
-- pip install python-dotenv aiohttp python-telegram-bot>=20
-- Configure either env vars, a .env file, or add PROJECT_* variables to your project's config module.
-- Register register_handlers(application) with your python-telegram-bot Application instance.
+Behavior:
+ - Reads PROJECT_URL / PROJECT_HOST / PROJECT_PORT from environment, .env, or common project config.
+ - If none set, falls back to the provided Railway URL.
+ - Responds to /test and plain-text "test" with ONLINE/OFFLINE and latency/details.
+
+Install:
+ pip install python-telegram-bot aiohttp python-dotenv
+
+Register:
+ from telegram_test_status import register_handlers
+ register_handlers(application)
+
 """
 from __future__ import annotations
 import os
@@ -20,17 +24,15 @@ import asyncio
 from typing import Tuple, Optional
 from importlib import import_module
 
-# Optional: load .env if present
+# Load .env if present
 try:
     from dotenv import load_dotenv, find_dotenv
     _dotenv_path = find_dotenv(raise_error_if_not_found=False)
     if _dotenv_path:
         load_dotenv(_dotenv_path)
 except Exception:
-    # python-dotenv not installed or .env not present — continue
     pass
 
-# Helper to get from env or fallback from module attributes
 def _get_from_env_or_module(name: str, modules: list[str]) -> Optional[str]:
     v = os.environ.get(name)
     if v:
@@ -40,20 +42,19 @@ def _get_from_env_or_module(name: str, modules: list[str]) -> Optional[str]:
             mod = import_module(mod_name)
         except Exception:
             continue
-        # try attribute or key (for dict-style configs)
         if hasattr(mod, name):
             return getattr(mod, name)
-        if isinstance(mod, dict) and name in mod:
-            return mod[name]
-        # some projects use lowercase names
         ln = name.lower()
         if hasattr(mod, ln):
             return getattr(mod, ln)
-        if isinstance(mod, dict) and ln in mod:
-            return mod[ln]
+        if hasattr(mod, "CONFIG") and isinstance(getattr(mod, "CONFIG"), dict):
+            cfg = getattr(mod, "CONFIG")
+            if name in cfg:
+                return cfg[name]
+            if ln in cfg:
+                return cfg[ln]
     return None
 
-# Common module names to attempt importing from your project
 _COMMON_CONFIG_MODULES = [
     "config",
     "settings",
@@ -63,6 +64,9 @@ _COMMON_CONFIG_MODULES = [
     "tls_gmail_python.settings",
 ]
 
+# Default fallback to the URL you provided
+_FALLBACK_URL = "https://tlscontact-visa-watcher-py-production-a1a8.up.railway.app/"
+
 PROJECT_URL: Optional[str] = _get_from_env_or_module("PROJECT_URL", _COMMON_CONFIG_MODULES)
 PROJECT_HOST: Optional[str] = _get_from_env_or_module("PROJECT_HOST", _COMMON_CONFIG_MODULES)
 _project_port_raw = _get_from_env_or_module("PROJECT_PORT", _COMMON_CONFIG_MODULES) or os.environ.get("PROJECT_PORT")
@@ -71,8 +75,8 @@ try:
 except Exception:
     PROJECT_PORT = 0
 
-# Optional override via explicit env (ensures env still has highest priority)
-PROJECT_URL = os.environ.get("PROJECT_URL") or PROJECT_URL
+# Env still has highest priority
+PROJECT_URL = os.environ.get("PROJECT_URL") or PROJECT_URL or _FALLBACK_URL
 PROJECT_HOST = os.environ.get("PROJECT_HOST") or PROJECT_HOST
 _project_port_env = os.environ.get("PROJECT_PORT")
 if _project_port_env:
@@ -81,7 +85,8 @@ if _project_port_env:
     except Exception:
         pass
 
-# Rest is the same check + Telegram handler (async for ptb v20+)
+CHECK_TIMEOUT: int = int(os.environ.get("CHECK_TIMEOUT") or 5)
+
 import aiohttp
 from telegram import Update
 from telegram.ext import (
@@ -91,8 +96,6 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-
-CHECK_TIMEOUT: int = int(os.environ.get("CHECK_TIMEOUT") or 5)
 
 async def check_http(url: str, timeout: int = CHECK_TIMEOUT) -> Tuple[bool, str]:
     start = time.monotonic()
