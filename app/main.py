@@ -114,11 +114,16 @@ async def root():
 @app.get("/test-telegram")
 async def trigger_test_telegram():
     """Trigger a manual Telegram status notification"""
-    success = await test_connection()
-    if success:
-        return {"success": True, "message": "Test notification sent to Telegram"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to send Telegram notification")
+    try:
+        success = await test_connection()
+        if success:
+            return {"success": True, "message": "Test notification sent to Telegram"}
+        else:
+            # If success is False, test_connection already logged the error
+            raise HTTPException(status_code=500, detail="Failed to send Telegram notification (see logs for details)")
+    except Exception as e:
+        logger.error(f"Endpoint /test-telegram failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 @app.on_event("startup")
 async def startup_event():
